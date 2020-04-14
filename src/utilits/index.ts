@@ -48,3 +48,14 @@ export const range = (start, end, step) => {
 
 };
 
+export const rangeFromIrregularNumbers = (start, end) => {
+	let to: string;
+	if (!+end) to = parseIrregularNumber(end);
+	const array = range(+start, +to, 1);
+	array.push(end);
+	return array;
+};
+
+function parseIrregularNumber(number: string) {
+	return number.replace(/(^\d+)(.+$)/i,'$1');
+}

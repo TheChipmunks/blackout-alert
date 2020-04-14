@@ -1,12 +1,14 @@
 import * as express from 'express';
 import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
-import { range } from '../../utilits';
+import { rangeFromIrregularNumbers, range } from '../../utilits';
 import axios from 'axios';
 import moment = require('moment');
 
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
+let logTime = null;
+
 
 class ScrapperController implements IControllerBase {
 	public path = '/scrapper';
@@ -21,17 +23,20 @@ class ScrapperController implements IControllerBase {
 	}
 
 	scrape = (that: ScrapperController) => async (req: Request, res: Response) => {
+		logTime = new Date();
 		const response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
-
+		console.log(`Took ${+new Date() - +logTime} ms to fetch html`);
+		logTime = new Date();
 		const dom = new JSDOM(response.data);
-
 		const html = dom.window.document;
+		console.log(`Took ${+new Date() - +logTime} ms to create DOM`);
+		logTime = new Date();
 		const content = html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
 		const array = Array.apply(null, content);
 		let prevDate = null;
 		const dates = array.reduce((acc, item) => {
 			if (item.cells.length === 1) {
-				const date = moment(item.querySelector('td').innerHTML, "D.M.YYYY").format('YYYY-MM-DD');
+				const date = moment(item.querySelector('td').innerHTML, 'D.M.YYYY').format('YYYY-MM-DD');
 				acc[date] = [];
 				prevDate = date;
 				return acc;
@@ -47,7 +52,8 @@ class ScrapperController implements IControllerBase {
 					case 1:
 						acc['place'] = {
 							city: item.querySelector('b').innerHTML,
-							streets: that.getStreets(item)
+							streets: that.getStreets(item),
+							origin: item.textContent
 						};
 						break;
 					case 2:
@@ -65,11 +71,10 @@ class ScrapperController implements IControllerBase {
 			}
 			return acc;
 		}, {});
-
+		console.log(`Took ${+new Date() - +logTime} ms to parse HTML`);
 		res.send(dates);
 		// console.log(JSON.stringify(dates));
 	};
-
 
 	getStreets = (td) => {
 		const inner = td.innerHTML;
@@ -78,6 +83,7 @@ class ScrapperController implements IControllerBase {
 			// console.log(`Don't includes Херсон in`, td);
 			return [];
 		}
+
 		function check(result) {
 			return Boolean(result && result[1]);
 		}
@@ -125,19 +131,25 @@ class ScrapperController implements IControllerBase {
 				name: name && name[0] ? name[0].trim() : null,
 				oldName: oldName && oldName[0] ? oldName[0].replace('(', '').replace(')', '').trim() : null,
 				numbers: numbers.map(el => {
-					const number = el.trim();
+					let number = el.trim();
+					if (number.includes('--')) number = number.replace('--', '-');
 					if (number.includes('-')) {
 						const points = number.split('-');
-						const start = Number(points[0]);
-						const end = Number(points[1]);
-						if (start && end && end < 1000) {
-							return range(start, end, 1);
+						const start = points[0];
+						const end = points[1];
+						if (+start && +end && +end < 1000) {
+							return range(+start, +end, 1);
+						}
+						const matches = number.match(/(.*)-(.*)/);
+						if (matches && matches.length > 2) {
+							return rangeFromIrregularNumbers(matches[1], matches[2]);
 						}
 						return number;
 					} else {
 						return number;
 					}
-				}).flat()
+				}).flat(),
+				originNumbers: numbers.map(el => el.trim())
 			};
 		});
 
