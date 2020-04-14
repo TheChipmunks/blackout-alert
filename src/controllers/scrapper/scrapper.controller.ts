@@ -3,6 +3,7 @@ import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range } from '../../utilits';
 import axios from 'axios';
+import moment = require('moment');
 
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
@@ -30,7 +31,7 @@ class ScrapperController implements IControllerBase {
 		let prevDate = null;
 		const dates = array.reduce((acc, item) => {
 			if (item.cells.length === 1) {
-				const date = item.querySelector('td').innerHTML;
+				const date = moment(item.querySelector('td').innerHTML, "D.M.YYYY").format('YYYY-MM-DD');
 				acc[date] = [];
 				prevDate = date;
 				return acc;
