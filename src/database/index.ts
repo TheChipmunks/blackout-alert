@@ -1,6 +1,6 @@
 import * as mysql from 'mysql';
 import config from './config';
-import { DBResponse, IConvertedDBStructure, IConvertedStreet, IScrappedTr } from '../controllers/scrapper/scrapper.interface';
+import { DBResponse, IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
@@ -33,22 +33,22 @@ class DB {
 
 		this.pool.query(`DELETE FROM numbers`, '', (error, res) => {
 			if (error) {
-				callback({ success: false, error});
+				callback({ success: false, error });
 				return;
 			}
 			this.pool.query(`DELETE FROM streets`, '', (error, res) => {
 				if (error) {
-					callback({ success: false, error});
+					callback({ success: false, error });
 					return;
 				}
 				this.pool.query(streetsSQL, [streets], (error, result) => {
 					if (error) {
-						callback({ success: false, error});
+						callback({ success: false, error });
 						return;
 					}
 					this.pool.query(numbersSQL, [numbers], (error, result) => {
 						if (error) {
-							callback({ success: false, error});
+							callback({ success: false, error });
 							return;
 						}
 						callback({ success: true });

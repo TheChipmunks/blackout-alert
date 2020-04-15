@@ -6,11 +6,10 @@ import axios from 'axios';
 import database from '../../database';
 import { DBResponse, IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IScrappedTr } from './scrapper.interface';
 import moment = require('moment');
+import { logger } from '../../middleware/logger';
 
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
-let logTime = null;
-
 
 class ScrapperController implements IControllerBase {
 	public path = '/scrapper';
@@ -25,14 +24,12 @@ class ScrapperController implements IControllerBase {
 	}
 
 	scrape = (that: ScrapperController) => async (req: Request, res: Response) => {
-		logTime = new Date();
+		logger.startTimeEvents();
 		const response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
-		console.log(`Took ${+new Date() - +logTime} ms to fetch html`);
-		logTime = new Date();
+		logger.timeEvent('fetch HTML');
 		const dom = new JSDOM(response.data);
 		const html = dom.window.document;
-		console.log(`Took ${+new Date() - +logTime} ms to create DOM`);
-		logTime = new Date();
+		logger.timeEvent('create DOM');
 		const content = html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
 		const array = Array.apply(null, content);
 		let prevDate = null;
@@ -73,9 +70,13 @@ class ScrapperController implements IControllerBase {
 			}
 			return acc;
 		}, {});
-		console.log(`Took ${+new Date() - +logTime} ms to parse HTML`);
-		database.saveScrappedData(that.convertStructure(dates), (response: DBResponse) => {
+		logger.timeEvent('parse HTML');
+		const convertedData = that.convertStructure(dates);
+		logger.timeEvent('convert data');
+		database.saveScrappedData(convertedData, (response: DBResponse) => {
+			logger.timeEvent('save in database');
 			res.status(response.success ? 200 : 409).send({ response });
+			logger.endTimeEvents();
 		});
 		return;
 	};
