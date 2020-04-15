@@ -9,17 +9,22 @@ export default loggerMiddleware;
 
 class Logger {
 	private time: Date;
+	private startTime: Date;
 
 	constructor() {
 		this.time = null;
+		this.startTime = null;
 	}
 
 	startTimeEvents() {
 		this.time = new Date();
+		this.startTime = new Date();
 	}
 
 	endTimeEvents() {
+		console.log(`Total spent ${+new Date() - +this.startTime} ms `);
 		this.time = null;
+		this.startTime = null;
 	}
 
 	timeEvent(message: string) {
