@@ -1,11 +1,11 @@
 import * as express from 'express';
 import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
-import { rangeFromIrregularNumbers, range } from '../../utilits';
+import { range, rangeFromIrregularNumbers } from '../../utilits';
 import axios from 'axios';
-import moment = require('moment');
 import database from '../../database';
-import { IScrappedTr } from './scrapper.interface';
+import { DBResponse, IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IScrappedTr } from './scrapper.interface';
+import moment = require('moment');
 
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
@@ -74,55 +74,44 @@ class ScrapperController implements IControllerBase {
 			return acc;
 		}, {});
 		console.log(`Took ${+new Date() - +logTime} ms to parse HTML`);
-		that.setToDatabase(dates, (sqlErrors => {
-			// if (sqlErrors.length) {
-			// 	res.status(409);
-			// 	res.send({ success: false, errors: sqlErrors });
-			// 	return;
-			// }
-			// res.status(200);
-			// res.send({ success: true });
-		}));
-		res.status(200);
-		res.send({ success: true });
+		database.saveScrappedData(that.convertStructure(dates), (response: DBResponse) => {
+			res.status(response.success ? 200 : 409).send({ response });
+		});
+		return;
 	};
 
-	setToDatabase(dates, callback: (errors) => void) {
-		let sqlErrors = [];
-		database.pool.query(`DELETE FROM numbers`, '', (error, res) => {
-			if (error) sqlErrors.push(error);
-			database.pool.query(`DELETE FROM streets`, '', (error, res) => {
-				if (error) sqlErrors.push(error);
-				const streetsSQL = 'INSERT INTO streets (street_name, street_old_name, street_origin, date, time, reason) VALUES ?';
-				const numbersSQL = 'INSERT INTO numbers (street_id, number, origin_numbers) VALUES ?';
-				const array = Object.entries<[IScrappedTr]>(dates);
-				for (const el of array) {
-					const date = el[0];
-					const data: IScrappedTr[] = el[1];
-					for (const item of data) {
-						const time = item.time;
-						const reason = item.reason;
-						for (const street of item.place.streets) {
-							if (!street) continue;
-							database.pool.query(streetsSQL, [[[street.name, street.oldName, item.place.origin, date, time, reason]]], (err, result) => {
-								if (err) sqlErrors.push(err.sqlMessage);
-								if (result) {
-									for(const number of street.numbers) {
-										if(sqlErrors.length) break;
-										database.pool.query(numbersSQL, [[[result.insertId, number, `${street.originNumbers}`]]], (err, result) => {
-											if (err) {
-												// console.log(err.sqlMessage)
-												sqlErrors.push(err.sqlMessage);
-											}
-										});
-									}
-								}
-							});
-						}
-					}
-				}
+	convertStructure(dates): IConvertedDBStructure {
+		let street_id = 1;
+		const array = Object.entries<[IScrappedTr]>(dates);
+		return array.map(([date, scrappedStreets]) => {
+			return scrappedStreets.map((scrappedStreet) => {
+				return scrappedStreet.place.streets.reduce((acc: IConvertedDBStructure, item) => {
+					if (!item) return acc;
+					const street: IConvertedStreet = {
+						street_id,
+						date: date,
+						time: scrappedStreet.time,
+						street_name: item.name,
+						street_old_name: item.oldName,
+						street_origin: scrappedStreet.place.origin,
+						reason: scrappedStreet.reason
+
+					};
+					const numbers: IConvertedNumber[] = item.numbers.map((number) => {
+						const num: IConvertedNumber = {
+							street_id,
+							number,
+							origin_numbers: `${item.originNumbers}`
+						};
+						return num;
+					});
+					street_id++;
+					return { ...acc, streets: [...acc.streets, street], numbers: [...acc.numbers, ...numbers] };
+				}, { streets: [], numbers: [] });
 			});
-		});
+		}).flat(Infinity).reduce((acc, el) => {
+			return { streets: [...acc.streets, ...el.streets], numbers: [...acc.numbers, ...el.numbers] };
+		}, { streets: [], numbers: [] });
 	}
 
 	getStreets = (td) => {

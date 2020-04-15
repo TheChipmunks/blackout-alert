@@ -17,3 +17,29 @@ export interface IStreet {
 	numbers: string[];
 	originNumbers: string[];
 }
+
+export interface IConvertedStreet {
+	street_id: number;
+	street_name: string;
+	street_old_name: string;
+	street_origin: string;
+	date: string;
+	time: string;
+	reason: string
+}
+
+export interface IConvertedNumber {
+	street_id: number,
+	number: string,
+	origin_numbers: string
+}
+
+export interface IConvertedDBStructure {
+	streets: IConvertedStreet[];
+	numbers: IConvertedNumber[]
+}
+
+export interface DBResponse {
+	success: boolean;
+	error?: object;
+}
