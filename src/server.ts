@@ -3,6 +3,7 @@ import * as bodyParser from 'body-parser';
 import loggerMiddleware from './middleware/logger';
 
 import ScrapperController from './controllers/scrapper/scrapper.controller';
+import database from './database';
 
 const app = new App({
 	port: 5000,
@@ -16,4 +17,5 @@ const app = new App({
 	]
 });
 
+database.createDBPool();
 app.listen();

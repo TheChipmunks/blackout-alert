@@ -4,6 +4,8 @@ import IControllerBase from 'interfaces/IControllerBase.interface';
 import { rangeFromIrregularNumbers, range } from '../../utilits';
 import axios from 'axios';
 import moment = require('moment');
+import database from '../../database';
+import { IScrappedTr } from './scrapper.interface';
 
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
@@ -72,9 +74,56 @@ class ScrapperController implements IControllerBase {
 			return acc;
 		}, {});
 		console.log(`Took ${+new Date() - +logTime} ms to parse HTML`);
-		res.send(dates);
-		// console.log(JSON.stringify(dates));
+		that.setToDatabase(dates, (sqlErrors => {
+			// if (sqlErrors.length) {
+			// 	res.status(409);
+			// 	res.send({ success: false, errors: sqlErrors });
+			// 	return;
+			// }
+			// res.status(200);
+			// res.send({ success: true });
+		}));
+		res.status(200);
+		res.send({ success: true });
 	};
+
+	setToDatabase(dates, callback: (errors) => void) {
+		let sqlErrors = [];
+		database.pool.query(`DELETE FROM numbers`, '', (error, res) => {
+			if (error) sqlErrors.push(error);
+			database.pool.query(`DELETE FROM streets`, '', (error, res) => {
+				if (error) sqlErrors.push(error);
+				const streetsSQL = 'INSERT INTO streets (street_name, street_old_name, street_origin, date, time, reason) VALUES ?';
+				const numbersSQL = 'INSERT INTO numbers (street_id, number, origin_numbers) VALUES ?';
+				const array = Object.entries<[IScrappedTr]>(dates);
+				for (const el of array) {
+					const date = el[0];
+					const data: IScrappedTr[] = el[1];
+					for (const item of data) {
+						const time = item.time;
+						const reason = item.reason;
+						for (const street of item.place.streets) {
+							if (!street) continue;
+							database.pool.query(streetsSQL, [[[street.name, street.oldName, item.place.origin, date, time, reason]]], (err, result) => {
+								if (err) sqlErrors.push(err.sqlMessage);
+								if (result) {
+									for(const number of street.numbers) {
+										if(sqlErrors.length) break;
+										database.pool.query(numbersSQL, [[[result.insertId, number, `${street.originNumbers}`]]], (err, result) => {
+											if (err) {
+												// console.log(err.sqlMessage)
+												sqlErrors.push(err.sqlMessage);
+											}
+										});
+									}
+								}
+							});
+						}
+					}
+				}
+			});
+		});
+	}
 
 	getStreets = (td) => {
 		const inner = td.innerHTML;
@@ -123,7 +172,7 @@ class ScrapperController implements IControllerBase {
 
 		const streets = result[1].split(';').map(item => {
 			if (!item || item === ' ') return;
-			const name = item.match(/(^\d*['`" А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєії]\d*))+/ig);
+			const name = item.match(/(^\d*['`"\. А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєії]\d*))+/ig);
 			const numbers = item.match(/(\ \d{1,}-{0,2}\d*\/?\d*[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?)+/ig);
 			const oldName = item.match(/(\([ А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}\))+/ig);
 			if (!numbers) return;
