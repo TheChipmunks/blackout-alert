@@ -39,7 +39,3 @@ export interface IConvertedDBStructure {
 	numbers: IConvertedNumber[]
 }
 
-export interface DBResponse {
-	success: boolean;
-	error?: object;
-}

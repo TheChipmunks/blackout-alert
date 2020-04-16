@@ -3,8 +3,8 @@ import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range, rangeFromIrregularNumbers } from '../../utilits';
 import axios from 'axios';
-import database from '../../database';
-import { DBResponse, IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IScrappedTr } from './scrapper.interface';
+import database, { DBResponse } from '../../database';
+import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IScrappedTr } from './scrapper.interface';
 import moment = require('moment');
 import { logger } from '../../middleware/logger';
 

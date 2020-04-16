@@ -1,9 +1,15 @@
 import * as mysql from 'mysql';
 import config from './config';
-import { DBResponse, IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
+import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
+
+export interface DBResponse {
+	success: boolean;
+	data?: object;
+	error?: object;
+}
 
 class DB {
 	public pool: any;
@@ -55,6 +61,20 @@ class DB {
 					});
 				});
 			});
+		});
+	}
+
+	searchByStreetName(text: string, callback: (response: DBResponse) => void) {
+		this.pool.query(`SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses 
+											FROM streets 
+											LEFT JOIN numbers ON streets.street_id = numbers.street_id 
+											WHERE street_name LIKE '${text}%' OR street_old_name LIKE '${text}%'
+											GROUP BY streets.street_id `, '', (error, data) => {
+			if (error) {
+				callback({ success: false, error });
+				return;
+			}
+			callback({ success: true, data: data });
 		});
 	}
 }
