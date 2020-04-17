@@ -1,6 +1,7 @@
 import * as mysql from 'mysql';
 import config from './config';
 import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
+import { on } from 'cluster';
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
@@ -64,12 +65,16 @@ class DB {
 		});
 	}
 
-	searchByStreetName(text: string, callback: (response: DBResponse) => void) {
-		this.pool.query(`SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses 
-											FROM streets 
+	findStreet(req: { city?: string, street: string }, callback: (response: DBResponse) => void) {
+		const conditions = {
+			onlyStreet: `WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`,
+			cityAndStreet: `WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`
+		};
+		const sql = `SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses FROM streets 
 											LEFT JOIN numbers ON streets.street_id = numbers.street_id 
-											WHERE street_name LIKE '${text}%' OR street_old_name LIKE '${text}%'
-											GROUP BY streets.street_id `, '', (error, data) => {
+											${!req.city ? conditions.onlyStreet : conditions.cityAndStreet}
+											GROUP BY streets.street_id`;
+		this.pool.query(sql, '', (error, data) => {
 			if (error) {
 				callback({ success: false, error });
 				return;

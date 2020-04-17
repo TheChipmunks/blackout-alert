@@ -3,6 +3,7 @@ import * as express from 'express';
 import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
 import database, { DBResponse } from '../../database';
+import { logger } from '../../middleware/logger';
 
 class SearchController implements IControllerBase {
 	public path = '/search';
@@ -17,9 +18,14 @@ class SearchController implements IControllerBase {
 	}
 
 	search = async (req: Request, res: Response) => {
-		if (req.query.street) {
-			database.searchByStreetName(req.query.street, (response: DBResponse) => {
+		logger.startTimeEvents();
+		const city = req.query.city;
+		const street = req.query.street;
+		if (street) {
+			database.findStreet({ city, street }, (response: DBResponse) => {
+				logger.timeEvent(`to find ${city} ${street}`);
 				res.status(response.success ? 200 : 400).send(response);
+				logger.endTimeEvents();
 			});
 			return;
 		}
