@@ -1,8 +1,10 @@
-export interface IScrappedTr {
+export interface IScrappedRow {
 	company: string;
-	place: IPlace;
-	reason: string;
+	date: string;
 	time: string;
+	reason: string;
+	origin: string;
+	places: IPlace[]
 }
 
 export interface IPlace {
@@ -20,6 +22,7 @@ export interface IStreet {
 
 export interface IConvertedStreet {
 	street_id: number;
+	city: string;
 	street_name: string;
 	street_old_name: string;
 	street_origin: string;
@@ -29,9 +32,9 @@ export interface IConvertedStreet {
 }
 
 export interface IConvertedNumber {
-	street_id: number,
-	number: string,
-	origin_numbers: string
+	street_id: number;
+	number: string;
+	origin_numbers: string;
 }
 
 export interface IConvertedDBStructure {

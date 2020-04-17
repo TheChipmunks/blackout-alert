@@ -4,7 +4,7 @@ import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range, rangeFromIrregularNumbers } from '../../utilits';
 import axios from 'axios';
 import database, { DBResponse } from '../../database';
-import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IScrappedTr } from './scrapper.interface';
+import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IPlace, IScrappedRow, IStreet } from './scrapper.interface';
 import moment = require('moment');
 import { logger } from '../../middleware/logger';
 
@@ -31,45 +31,34 @@ class ScrapperController implements IControllerBase {
 		const html = dom.window.document;
 		logger.timeEvent('create DOM');
 		const content = html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
-		const array = Array.apply(null, content);
+		const rows = Array.apply(null, content);
 		let prevDate = null;
-		const dates = array.reduce((acc, item) => {
-			if (item.cells.length === 1) {
-				const date = moment(item.querySelector('td').innerHTML, 'D.M.YYYY').format('YYYY-MM-DD');
-				acc[date] = [];
-				prevDate = date;
-				return acc;
+		const dates: IScrappedRow[] = rows.map(tr => {
+			if (tr.cells.length === 1) {
+				prevDate = moment(tr.querySelector('td').textContent, 'D.M.YYYY').format('YYYY-MM-DD');
+				return;
 			}
-			if (item.querySelector('td').innerHTML !== 'Херсонські РЕМ') return acc;
-
-
-			const data = Array.apply(null, item.querySelectorAll('td')).reduce((acc, item, index) => {
+			let scrappedRow = Array.apply(null, tr.getElementsByTagName('td')).reduce((data: IScrappedRow, td, index) => {
 				switch (index) {
 					case 0:
-						acc['company'] = item.innerHTML;
+						data.company = td.textContent;
 						break;
 					case 1:
-						acc['place'] = {
-							city: item.querySelector('b').innerHTML,
-							streets: that.getStreets(item),
-							origin: item.textContent
-						};
+						data.origin = td.textContent;
+						data.places = that.parseMainContentFrom(td.innerHTML);
 						break;
 					case 2:
-						acc['reason'] = item.innerHTML;
+						data.reason = td.textContent;
 						break;
 					case 3:
-						acc['time'] = item.innerHTML;
+						data.time = td.textContent;
 						break;
-
 				}
-				return acc;
+				return data;
 			}, {});
-			if (data.place.city === 'Херсон' && data.place.streets.length) {
-				acc[prevDate].push(data);
-			}
-			return acc;
-		}, {});
+			scrappedRow.date = prevDate;
+			return scrappedRow;
+		}).filter(el => !!el);
 		logger.timeEvent('parse HTML');
 		const convertedData = that.convertStructure(dates);
 		logger.timeEvent('convert data');
@@ -78,89 +67,25 @@ class ScrapperController implements IControllerBase {
 			res.status(response.success ? 200 : 409).send({ response });
 			logger.endTimeEvents();
 		});
-		return;
 	};
 
-	convertStructure(dates): IConvertedDBStructure {
-		let street_id = 1;
-		const array = Object.entries<[IScrappedTr]>(dates);
-		return array.map(([date, scrappedStreets]) => {
-			return scrappedStreets.map((scrappedStreet) => {
-				return scrappedStreet.place.streets.reduce((acc: IConvertedDBStructure, item) => {
-					if (!item) return acc;
-					const street: IConvertedStreet = {
-						street_id,
-						date: date,
-						time: scrappedStreet.time,
-						street_name: item.name,
-						street_old_name: item.oldName,
-						street_origin: scrappedStreet.place.origin,
-						reason: scrappedStreet.reason
-
-					};
-					const numbers: IConvertedNumber[] = item.numbers.map((number) => {
-						const num: IConvertedNumber = {
-							street_id,
-							number,
-							origin_numbers: `${item.originNumbers}`
-						};
-						return num;
-					});
-					street_id++;
-					return { ...acc, streets: [...acc.streets, street], numbers: [...acc.numbers, ...numbers] };
-				}, { streets: [], numbers: [] });
-			});
-		}).flat(Infinity).reduce((acc, el) => {
-			return { streets: [...acc.streets, ...el.streets], numbers: [...acc.numbers, ...el.numbers] };
-		}, { streets: [], numbers: [] });
+	parseMainContentFrom(origin: string): IPlace[] {
+		let splitted = origin.split(/<br>/);
+		splitted = splitted.filter(el => el !== '');
+		if (splitted.length % 2) splitted.pop();
+		const places: IPlace[] = splitted.reduce((acc: IPlace[], item, index, array) => {
+			if (index % 2) return acc;
+			const streets = this.getStreetsFrom(array[index + 1]).filter(el => el !== null);
+			const city = array[index].replace('<b>', '').replace(':', '').replace('</b>', '').trim();
+			if (!streets.length) return acc;
+			acc.push({ city, streets: streets, origin });
+			return acc;
+		}, []);
+		return places;
 	}
 
-	getStreets = (td) => {
-		const inner = td.innerHTML;
-
-		if (!inner.includes('Херсон')) {
-			// console.log(`Don't includes Херсон in`, td);
-			return [];
-		}
-
-		function check(result) {
-			return Boolean(result && result[1]);
-		}
-
-		let reg = '';
-		let regAlt = '';
-		const val = td.querySelectorAll('br').length;
-		switch (val) {
-			case 4:
-				reg = '<br><br>(.*)<br><br>';
-				break;
-			case 2:
-				reg = '<br>(.*)<br>';
-				regAlt = '<br><br>(.*)';
-				break;
-			case 1:
-				reg = '<br>(.*)';
-				break;
-			case 0 :
-				break;
-			default:
-				reg = '<b>Херсон</b>: <br>(.*)<br>';
-				break;
-		}
-
-		if (!reg) {
-			console.log(`Can't find reg of ${td.innerHTML}`);
-			return [];
-		}
-		let result = inner.match(reg);
-
-		if (!check(result)) {
-			result = inner.match(regAlt);
-			if (!check(result)) return [];
-		}
-
-
-		const streets = result[1].split(';').map(item => {
+	getStreetsFrom(string: string): IStreet[] {
+		return string.split(';').map(item => {
 			if (!item || item === ' ') return;
 			const name = item.match(/(^\d*['`"\. А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєії]\d*))+/ig);
 			const numbers = item.match(/(\ \d{1,}-{0,2}\d*\/?\d*[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?)+/ig);
@@ -190,10 +115,42 @@ class ScrapperController implements IControllerBase {
 				}).flat(),
 				originNumbers: numbers.map(el => el.trim())
 			};
-		});
+		}).filter(el => !!el);
+	}
 
-		return streets;
-	};
+	convertStructure(scrappedRow: IScrappedRow[]): IConvertedDBStructure {
+		let street_id = 1;
+		return scrappedRow.reduce((acc: IConvertedDBStructure, row) => {
+			const places = row.places.reduce((acc: IConvertedDBStructure, place) => {
+				const streets = place.streets.reduce((acc: IConvertedDBStructure, street) => {
+					if (!street) return acc;
+					const convertedStreet: IConvertedStreet = {
+						street_id,
+						city: place.city,
+						date: row.date,
+						time: row.time,
+						street_name: street.name,
+						street_old_name: street.oldName,
+						street_origin: place.origin,
+						reason: row.reason
+					};
+					const numbers: IConvertedNumber[] = street.numbers.map((number) => {
+						const num: IConvertedNumber = {
+							street_id,
+							number,
+							origin_numbers: `${street.numbers}`
+						};
+						return num;
+					});
+					street_id++;
+					return { streets: [...acc.streets, convertedStreet], numbers: [...acc.numbers, ...numbers] };
+				}, { streets: [], numbers: [] });
+				return { streets: [...acc.streets, ...streets.streets], numbers: [...acc.numbers, ...streets.numbers] };
+			}, { streets: [], numbers: [] });
+			return { streets: [...acc.streets, ...places.streets], numbers: [...acc.numbers, ...places.numbers] };
+		}, { streets: [], numbers: [] });
+	}
+
 }
 
 export default ScrapperController;
