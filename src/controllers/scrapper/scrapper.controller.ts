@@ -4,7 +4,7 @@ import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range, rangeFromIrregularNumbers } from '../../utilits';
 import axios from 'axios';
 import database, { DBResponse } from '../../database';
-import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IPlace, IScrappedRow, IStreet } from './scrapper.interface';
+import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IPlace, IScrapedRow, IStreet } from './scrapper.interface';
 import moment = require('moment');
 import { logger } from '../../middleware/logger';
 
@@ -33,12 +33,12 @@ class ScrapperController implements IControllerBase {
 		const content = html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
 		const rows = Array.apply(null, content);
 		let prevDate = null;
-		const dates: IScrappedRow[] = rows.map(tr => {
+		const dates: IScrapedRow[] = rows.map(tr => {
 			if (tr.cells.length === 1) {
 				prevDate = moment(tr.querySelector('td').textContent, 'D.M.YYYY').format('YYYY-MM-DD');
 				return;
 			}
-			let scrappedRow = Array.apply(null, tr.getElementsByTagName('td')).reduce((data: IScrappedRow, td, index) => {
+			let scrapedRow = Array.apply(null, tr.getElementsByTagName('td')).reduce((data: IScrapedRow, td, index) => {
 				switch (index) {
 					case 0:
 						data.company = td.textContent;
@@ -56,13 +56,13 @@ class ScrapperController implements IControllerBase {
 				}
 				return data;
 			}, {});
-			scrappedRow.date = prevDate;
-			return scrappedRow;
+			scrapedRow.date = prevDate;
+			return scrapedRow;
 		}).filter(el => !!el);
 		logger.timeEvent('parse HTML');
 		const convertedData = that.convertStructure(dates);
 		logger.timeEvent('convert data');
-		database.saveScrappedData(convertedData, (response: DBResponse) => {
+		database.saveScrapedData(convertedData, (response: DBResponse) => {
 			logger.timeEvent('save in database');
 			res.status(response.success ? 200 : 409).send({ response });
 			logger.endTimeEvents();
@@ -118,9 +118,9 @@ class ScrapperController implements IControllerBase {
 		}).filter(el => !!el);
 	}
 
-	convertStructure(scrappedRow: IScrappedRow[]): IConvertedDBStructure {
+	convertStructure(scrapedRow: IScrapedRow[]): IConvertedDBStructure {
 		let street_id = 1;
-		return scrappedRow.reduce((acc: IConvertedDBStructure, row) => {
+		return scrapedRow.reduce((acc: IConvertedDBStructure, row) => {
 			const places = row.places.reduce((acc: IConvertedDBStructure, place) => {
 				const streets = place.streets.reduce((acc: IConvertedDBStructure, street) => {
 					if (!street) return acc;

@@ -1,4 +1,4 @@
-export interface IScrappedRow {
+export interface IScrapedRow {
 	company: string;
 	date: string;
 	time: string;
