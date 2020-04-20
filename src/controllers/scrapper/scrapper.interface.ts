@@ -4,7 +4,8 @@ export interface IScrapedRow {
 	time: string;
 	reason: string;
 	origin: string;
-	places: IPlace[]
+	type: EventType;
+	places: IPlace[];
 }
 
 export interface IPlace {
@@ -20,8 +21,12 @@ export interface IStreet {
 	originNumbers: string[];
 }
 
-export interface IConvertedStreet {
-	street_id: number;
+export enum EventType {
+	planned,
+	outages
+}
+
+export interface IConvertedEvent {
 	company: string;
 	city: string;
 	street_name: string;
@@ -29,17 +34,17 @@ export interface IConvertedStreet {
 	street_origin: string;
 	date: string;
 	time: string;
-	reason: string
+	reason: string;
+	houses: IConvertedHouse[];
+	type: EventType
 }
 
-export interface IConvertedNumber {
-	street_id: number;
+export interface IConvertedHouse {
 	number: string;
 	origin_numbers: string;
 }
 
 export interface IConvertedDBStructure {
-	streets: IConvertedStreet[];
-	numbers: IConvertedNumber[]
+	events: IConvertedEvent[];
 }
 

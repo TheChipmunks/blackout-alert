@@ -16,6 +16,8 @@ class DB {
 
 	constructor() {
 		this.pool = null;
+		this.getCompany = this.getCompany.bind(this);
+		this.saveScrapedData = this.saveScrapedData.bind(this);
 	}
 
 	createDBPool() {
@@ -32,56 +34,67 @@ class DB {
 	}
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
-		const streets = data.streets.map(item => [item.street_id, item.company, item.city, item.street_name, item.street_old_name, item.street_origin, item.date, item.time, item.reason]);
-		const numbers = data.numbers.map(item => [item.street_id, item.number, item.origin_numbers]);
-		const streetsSQL = 'INSERT INTO streets (street_id, company, city, street_name, street_old_name, street_origin, date, time, reason) VALUES ?';
-		const numbersSQL = 'INSERT INTO numbers (street_id, number, origin_numbers) VALUES ?';
+		const eventSQL = 'INSERT INTO events (company, city, street, date, time, reason) VALUES ?';
 
-		this.pool.query(`DELETE FROM numbers`, '', (error, res) => {
+		this.pool.query(`DELETE FROM events`, '', (error, res) => {
 			if (error) {
 				callback({ success: false, error });
 				return;
 			}
-			this.pool.query(`DELETE FROM streets`, '', (error, res) => {
-				if (error) {
-					callback({ success: false, error });
-					return;
-				}
-				this.pool.query(streetsSQL, [streets], (error, result) => {
-					if (error) {
-						callback({ success: false, error });
-						return;
-					}
-					this.pool.query(numbersSQL, [numbers], (error, result) => {
-						if (error) {
-							callback({ success: false, error });
-							return;
-						}
-						callback({ success: true });
-					});
+			this.pool.getConnection((err, connection) => {
+				data.events.map(async event => {
+					const company = await this.getCompany(connection, event.company);
+					console.log({ company });
 				});
+				callback({ success: true });
 			});
 		});
 	}
 
-	findStreet(req: { city?: string, street: string }, callback: (response: DBResponse) => void) {
-			this.pool.query('SELECT * FROM some', '', (error, _data) => {
-				let data = [];
-				for (let item of _data) {
-					if (data.find(el => el[0] === item.name_1)) continue;
-					data.push([item.name_1, item.name_5, item.name_2, item.name_4, item.name_3]);
-				}
-
-
-				// const uniqueArray = data.filter((thing, index) => {
-				// 	const _thing = JSON.stringify(thing);
-				// 	return index === thing.findIndex(obj => {
-				// 		return JSON.stringify(obj) === _thing;
-				// 	});
-				// });
-				callback({ success: true, data });
+	async getCompany(connection, company: string) {
+		return new Promise(async (resolve, rej) => {
+			let selected = await new Promise((resolve, reject) => {
+				connection.query(`SELECT id FROM companies WHERE company_name LIKE '${company}'`, '', (error, res) => {
+					if (!res.length) {
+						resolve(undefined);
+						return;
+					}
+					console.log(res[0].id);
+					resolve(res[0].id);
+				});
 			});
-			return
+			if (!selected) {
+				selected = await new Promise((resolve, reject) => {
+					connection.query(`INSERT INTO companies (company_name) VALUES ('${company}')`, '', (error, res) => {
+						console.log({ insertId: res.insertId });
+						resolve(res.insertId);
+					});
+				});
+			}
+			console.log(selected);
+			resolve(selected);
+		});
+	}
+
+
+	findStreet(req: { city?: string, street: string }, callback: (response: DBResponse) => void) {
+		this.pool.query('SELECT * FROM some', '', (error, _data) => {
+			let data = [];
+			for (let item of _data) {
+				if (data.find(el => el[0] === item.name_1)) continue;
+				data.push([item.name_1, item.name_5, item.name_2, item.name_4, item.name_3]);
+			}
+
+
+			// const uniqueArray = data.filter((thing, index) => {
+			// 	const _thing = JSON.stringify(thing);
+			// 	return index === thing.findIndex(obj => {
+			// 		return JSON.stringify(obj) === _thing;
+			// 	});
+			// });
+			callback({ success: true, data });
+		});
+		return;
 		const conditions = {
 			onlyStreet: `WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`,
 			cityAndStreet: `WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`

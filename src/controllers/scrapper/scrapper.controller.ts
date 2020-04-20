@@ -4,10 +4,9 @@ import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range, rangeFromIrregularNumbers } from '../../utilits';
 import axios from 'axios';
 import database, { DBResponse } from '../../database';
-import { IConvertedDBStructure, IConvertedNumber, IConvertedStreet, IPlace, IScrapedRow, IStreet } from './scrapper.interface';
-import moment = require('moment');
+import { EventType, IConvertedDBStructure, IConvertedEvent, IConvertedHouse, IPlace, IScrapedRow, IStreet } from './scrapper.interface';
 import { logger } from '../../middleware/logger';
-
+import moment = require('moment');
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 
@@ -57,6 +56,7 @@ class ScrapperController implements IControllerBase {
 				return data;
 			}, {});
 			scrapedRow.date = prevDate;
+			scrapedRow.type = EventType.planned;
 			return scrapedRow;
 		}).filter(el => !!el);
 		logger.timeEvent('parse HTML');
@@ -119,13 +119,18 @@ class ScrapperController implements IControllerBase {
 	}
 
 	convertStructure(scrapedRow: IScrapedRow[]): IConvertedDBStructure {
-		let street_id = 1;
 		return scrapedRow.reduce((acc: IConvertedDBStructure, row) => {
 			const places = row.places.reduce((acc: IConvertedDBStructure, place) => {
-				const streets = place.streets.reduce((acc: IConvertedDBStructure, street) => {
+				const events = place.streets.reduce((acc: IConvertedDBStructure, street) => {
 					if (!street) return acc;
-					const convertedStreet: IConvertedStreet = {
-						street_id,
+					const houses: IConvertedHouse[] = street.numbers.map((number) => {
+						const num: IConvertedHouse = {
+							number,
+							origin_numbers: `${street.numbers}`
+						};
+						return num;
+					});
+					const event: IConvertedEvent = {
 						company: row.company,
 						city: place.city,
 						date: row.date,
@@ -133,25 +138,18 @@ class ScrapperController implements IControllerBase {
 						street_name: street.name,
 						street_old_name: street.oldName,
 						street_origin: place.origin,
-						reason: row.reason
+						reason: row.reason,
+						houses,
+						type: row.type
 					};
-					const numbers: IConvertedNumber[] = street.numbers.map((number) => {
-						const num: IConvertedNumber = {
-							street_id,
-							number,
-							origin_numbers: `${street.numbers}`
-						};
-						return num;
-					});
-					street_id++;
-					return { streets: [...acc.streets, convertedStreet], numbers: [...acc.numbers, ...numbers] };
-				}, { streets: [], numbers: [] });
-				return { streets: [...acc.streets, ...streets.streets], numbers: [...acc.numbers, ...streets.numbers] };
-			}, { streets: [], numbers: [] });
-			return { streets: [...acc.streets, ...places.streets], numbers: [...acc.numbers, ...places.numbers] };
-		}, { streets: [], numbers: [] });
-	}
 
+					return { events: [...acc.events, event] };
+				}, { events: [] });
+				return { events: [...acc.events, ...events.events] };
+			}, { events: [] });
+			return { events: [...acc.events, ...places.events] };
+		}, { events: [] });
+	}
 }
 
 export default ScrapperController;
