@@ -1,6 +1,8 @@
 import * as mysql from 'mysql';
 import config from './config';
 import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
+import { mysql_real_escape_string } from '../utilits';
+import moment = require('moment');
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
@@ -34,20 +36,24 @@ class DB {
 	}
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
-		const eventSQL = 'INSERT INTO events (company, city, street, date, time, reason) VALUES ?';
+		const eventSQL = 'INSERT INTO events (region, city, street, type, date, time, reason) VALUES ?';
 
-		this.pool.query(`DELETE FROM events`, '', (error, res) => {
-			if (error) {
-				callback({ success: false, error });
-				return;
-			}
-			this.pool.getConnection((err, connection) => {
-				data.events.map(async event => {
-					const region = await this.getCompany(connection, event.region);
-					console.log({ region });
+		this.pool.getConnection(async (err, connection) => {
+			for await (let event of data.events) {
+				if (moment(event.date).diff(moment(), 'days') === 0) continue;
+				const region = await this.getCompany(connection, event.region);
+				const city = await this.getCity(connection, event.city);
+
+				const response = await new Promise((resolve, reject) => {
+					connection.query(eventSQL, [[[region, city, 1, event.type, event.date, event.time, event.reason]]], (error, result) => {
+						// console.log(error);
+						resolve();
+					});
 				});
-				callback({ success: true });
-			});
+				// console.log({ city, name: event.city, response });
+
+			}
+			callback({ success: true });
 		});
 	}
 
@@ -59,23 +65,42 @@ class DB {
 						resolve(undefined);
 						return;
 					}
-					console.log(res[0].id);
 					resolve(res[0].id);
 				});
 			});
 			if (!selected) {
 				selected = await new Promise((resolve, reject) => {
 					connection.query(`INSERT INTO regions (name) VALUES ('${region}')`, '', (error, res) => {
-						console.log({ insertId: res.insertId });
 						resolve(res.insertId);
 					});
 				});
 			}
-			console.log(selected);
 			resolve(selected);
 		});
 	}
 
+	async getCity(connection, city: string) {
+		return new Promise(async (resolve, rej) => {
+			let selected = await new Promise((resolve, reject) => {
+				connection.query(`SELECT id FROM cities WHERE name LIKE '${mysql_real_escape_string(city)}'`, '', (error, res) => {
+					if (error) console.error(error);
+					if (!res.length) {
+						resolve(undefined);
+						return;
+					}
+					resolve(res[0].id);
+				});
+			});
+			if (!selected) {
+				selected = await new Promise((resolve, reject) => {
+					connection.query(`INSERT INTO cities (name) VALUES ('${mysql_real_escape_string(city)}')`, '', (error, res) => {
+						resolve(res.insertId);
+					});
+				});
+			}
+			resolve(selected);
+		});
+	}
 
 	findStreet(req: { city?: string, street: string }, callback: (response: DBResponse) => void) {
 		this.pool.query('SELECT * FROM some', '', (error, _data) => {

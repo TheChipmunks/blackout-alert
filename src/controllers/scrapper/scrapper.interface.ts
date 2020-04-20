@@ -1,6 +1,9 @@
+import * as moment from 'moment';
+import _date = moment.unitOfTime._date;
+
 export interface IScrapedRow {
 	region: string;
-	date: string;
+	date: _date;
 	time: string;
 	reason: string;
 	origin: string;
@@ -32,7 +35,7 @@ export interface IConvertedEvent {
 	street_name: string;
 	street_old_name: string;
 	street_origin: string;
-	date: string;
+	date: _date;
 	time: string;
 	reason: string;
 	houses: IConvertedHouse[];
