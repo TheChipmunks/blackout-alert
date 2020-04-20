@@ -1,5 +1,6 @@
 import * as express from 'express';
 import { Application } from 'express';
+import './controllers/commandLine'
 
 class App {
 	public app: Application;

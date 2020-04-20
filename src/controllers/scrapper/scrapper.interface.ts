@@ -22,6 +22,7 @@ export interface IStreet {
 
 export interface IConvertedStreet {
 	street_id: number;
+	company: string;
 	city: string;
 	street_name: string;
 	street_old_name: string;

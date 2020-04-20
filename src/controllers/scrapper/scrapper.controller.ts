@@ -12,7 +12,7 @@ const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 
 class ScrapperController implements IControllerBase {
-	public path = '/scrapper';
+	public path = '/scraper';
 	public router = express.Router();
 
 	constructor() {
@@ -35,7 +35,7 @@ class ScrapperController implements IControllerBase {
 		let prevDate = null;
 		const dates: IScrapedRow[] = rows.map(tr => {
 			if (tr.cells.length === 1) {
-				prevDate = moment(tr.querySelector('td').textContent, 'D.M.YYYY').format('YYYY-MM-DD');
+				prevDate = moment(tr.querySelector('td').textContent, 'D.M.YYYY').format('YYYY-MM-DD hh:mm:ss');
 				return;
 			}
 			let scrapedRow = Array.apply(null, tr.getElementsByTagName('td')).reduce((data: IScrapedRow, td, index) => {
@@ -126,6 +126,7 @@ class ScrapperController implements IControllerBase {
 					if (!street) return acc;
 					const convertedStreet: IConvertedStreet = {
 						street_id,
+						company: row.company,
 						city: place.city,
 						date: row.date,
 						time: row.time,
