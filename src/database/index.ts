@@ -1,8 +1,9 @@
 import * as mysql from 'mysql';
 import config from './config';
-import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
-import { mysql_real_escape_string } from '../utilits';
+import { IConvertedDBStructure, IConvertedHouse } from '../controllers/scrapper/scrapper.interface';
+import { mysqlString } from '../utilits';
 import moment = require('moment');
+import { logger } from '../middleware/logger';
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
@@ -18,7 +19,6 @@ class DB {
 
 	constructor() {
 		this.pool = null;
-		this.getCompany = this.getCompany.bind(this);
 		this.saveScrapedData = this.saveScrapedData.bind(this);
 	}
 
@@ -36,16 +36,39 @@ class DB {
 	}
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
-		const eventSQL = 'INSERT INTO events (region, city, street, type, date, time, reason) VALUES ?';
+		const eventSQL = 'INSERT INTO events (street, type, date, time, reason) VALUES ?';
 
 		this.pool.getConnection(async (err, connection) => {
+			logger.startProcessing('Import');
 			for await (let event of data.events) {
 				if (moment(event.date).diff(moment(), 'days') === 0) continue;
-				const region = await this.getCompany(connection, event.region);
-				const city = await this.getCity(connection, event.city);
+
+				const region = await this.setValue(connection,
+					`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
+					`INSERT INTO regions (name) VALUES ('${event.region}')`,
+					'');
+
+				const city = await this.setValue(connection,
+					`SELECT id FROM cities WHERE name LIKE '${mysqlString(event.city)}' AND region_id LIKE '${region}'`,
+					`INSERT INTO cities (region_id, name) VALUES ?`,
+					[[[region, mysqlString(event.city)]]]);
+
+				const street = await this.setValue(connection,
+					`SELECT id FROM streets WHERE name LIKE '${mysqlString(event.street_name)}' AND city_id LIKE '${city}'`,
+					`INSERT INTO streets (name, city_id, old_name, origin) VALUES ?`,
+					[[[event.street_name, city, event.street_old_name, event.street_origin]]]
+				);
+
+				for await (let house of event.houses) {
+					await this.setValue(connection,
+						`SELECT id FROM houses WHERE street_id LIKE '${street}' AND number LIKE '${house.number}'`,
+						`INSERT INTO houses (street_id, number, origin) VALUES ?`,
+						[[[street, house.number, house.origin_numbers]]]
+					);
+				}
 
 				const response = await new Promise((resolve, reject) => {
-					connection.query(eventSQL, [[[region, city, 1, event.type, event.date, event.time, event.reason]]], (error, result) => {
+					connection.query(eventSQL, [[[street, event.type, event.date, event.time, event.reason]]], (error, result) => {
 						// console.log(error);
 						resolve();
 					});
@@ -53,14 +76,16 @@ class DB {
 				// console.log({ city, name: event.city, response });
 
 			}
+
+			logger.stopProcessing('Import');
 			callback({ success: true });
 		});
 	}
 
-	async getCompany(connection, region: string) {
+	setValue(connection, selectSQL, insertSQL, insertData) {
 		return new Promise(async (resolve, rej) => {
 			let selected = await new Promise((resolve, reject) => {
-				connection.query(`SELECT id FROM regions WHERE name LIKE '${region}'`, '', (error, res) => {
+				connection.query(selectSQL, '', (error, res) => {
 					if (!res.length) {
 						resolve(undefined);
 						return;
@@ -70,30 +95,8 @@ class DB {
 			});
 			if (!selected) {
 				selected = await new Promise((resolve, reject) => {
-					connection.query(`INSERT INTO regions (name) VALUES ('${region}')`, '', (error, res) => {
-						resolve(res.insertId);
-					});
-				});
-			}
-			resolve(selected);
-		});
-	}
-
-	async getCity(connection, city: string) {
-		return new Promise(async (resolve, rej) => {
-			let selected = await new Promise((resolve, reject) => {
-				connection.query(`SELECT id FROM cities WHERE name LIKE '${mysql_real_escape_string(city)}'`, '', (error, res) => {
-					if (error) console.error(error);
-					if (!res.length) {
-						resolve(undefined);
-						return;
-					}
-					resolve(res[0].id);
-				});
-			});
-			if (!selected) {
-				selected = await new Promise((resolve, reject) => {
-					connection.query(`INSERT INTO cities (name) VALUES ('${mysql_real_escape_string(city)}')`, '', (error, res) => {
+					connection.query(insertSQL, insertData, (error, res) => {
+						if (error) console.log(error);
 						resolve(res.insertId);
 					});
 				});
@@ -121,13 +124,19 @@ class DB {
 		});
 		return;
 		const conditions = {
-			onlyStreet: `WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`,
-			cityAndStreet: `WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`
+			onlyStreet:
+				`WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`
+			,
+			cityAndStreet:
+				`WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`
+
 		};
-		const sql = `SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses FROM streets 
-											LEFT JOIN numbers ON streets.street_id = numbers.street_id 
-											${!req.city ? conditions.onlyStreet : conditions.cityAndStreet}
-											GROUP BY streets.street_id`;
+		const sql =
+			`SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses FROM streets
+				LEFT JOIN numbers ON streets.street_id = numbers.street_id
+				${!req.city ? conditions.onlyStreet : conditions.cityAndStreet}
+				GROUP BY streets.street_id`
+		;
 		this.pool.query(sql, '', (error, data) => {
 			if (error) {
 				callback({ success: false, error });
