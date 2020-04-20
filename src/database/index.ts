@@ -43,18 +43,18 @@ class DB {
 			}
 			this.pool.getConnection((err, connection) => {
 				data.events.map(async event => {
-					const company = await this.getCompany(connection, event.company);
-					console.log({ company });
+					const region = await this.getCompany(connection, event.region);
+					console.log({ region });
 				});
 				callback({ success: true });
 			});
 		});
 	}
 
-	async getCompany(connection, company: string) {
+	async getCompany(connection, region: string) {
 		return new Promise(async (resolve, rej) => {
 			let selected = await new Promise((resolve, reject) => {
-				connection.query(`SELECT id FROM companies WHERE company_name LIKE '${company}'`, '', (error, res) => {
+				connection.query(`SELECT id FROM regions WHERE name LIKE '${region}'`, '', (error, res) => {
 					if (!res.length) {
 						resolve(undefined);
 						return;
@@ -65,7 +65,7 @@ class DB {
 			});
 			if (!selected) {
 				selected = await new Promise((resolve, reject) => {
-					connection.query(`INSERT INTO companies (company_name) VALUES ('${company}')`, '', (error, res) => {
+					connection.query(`INSERT INTO regions (name) VALUES ('${region}')`, '', (error, res) => {
 						console.log({ insertId: res.insertId });
 						resolve(res.insertId);
 					});

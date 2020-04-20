@@ -1,5 +1,5 @@
 export interface IScrapedRow {
-	company: string;
+	region: string;
 	date: string;
 	time: string;
 	reason: string;
@@ -27,7 +27,7 @@ export enum EventType {
 }
 
 export interface IConvertedEvent {
-	company: string;
+	region: string;
 	city: string;
 	street_name: string;
 	street_old_name: string;

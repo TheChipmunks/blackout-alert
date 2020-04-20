@@ -40,7 +40,7 @@ class ScrapperController implements IControllerBase {
 			let scrapedRow = Array.apply(null, tr.getElementsByTagName('td')).reduce((data: IScrapedRow, td, index) => {
 				switch (index) {
 					case 0:
-						data.company = td.textContent;
+						data.region = td.textContent;
 						break;
 					case 1:
 						data.origin = td.textContent;
@@ -131,7 +131,7 @@ class ScrapperController implements IControllerBase {
 						return num;
 					});
 					const event: IConvertedEvent = {
-						company: row.company,
+						region: row.region,
 						city: place.city,
 						date: row.date,
 						time: row.time,
