@@ -1,6 +1,6 @@
 import * as mysql from 'mysql';
 import config from './config';
-import { IConvertedDBStructure, IConvertedHouse } from '../controllers/scrapper/scrapper.interface';
+import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interface';
 import { mysqlString } from '../utilits';
 import moment = require('moment');
 import { logger } from '../middleware/logger';
@@ -37,48 +37,47 @@ class DB {
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
 		const eventSQL = 'INSERT INTO events (street, type, date, time, reason) VALUES ?';
-
-		this.pool.getConnection(async (err, connection) => {
+		this.pool.getConnection((err, connection) => {
 			logger.startProcessing('Import');
-			for await (let event of data.events) {
-				if (moment(event.date).diff(moment(), 'days') === 0) continue;
+			connection.query('DELETE FROM events WHERE date >= NOW()', '', async error => {
+				if (error) throw error;
+				for await (let event of data.events) {
+					if (moment(event.date).diff(moment(), 'days') < 0) continue;
 
-				const region = await this.setValue(connection,
-					`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
-					`INSERT INTO regions (name) VALUES ('${event.region}')`,
-					'');
+					const region = await this.setValue(connection,
+						`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
+						`INSERT INTO regions (name) VALUES ('${event.region}')`,
+						'');
 
-				const city = await this.setValue(connection,
-					`SELECT id FROM cities WHERE name LIKE '${mysqlString(event.city)}' AND region_id LIKE '${region}'`,
-					`INSERT INTO cities (region_id, name) VALUES ?`,
-					[[[region, mysqlString(event.city)]]]);
+					const city = await this.setValue(connection,
+						`SELECT id FROM cities WHERE name LIKE '${mysqlString(event.city)}' AND region_id LIKE '${region}'`,
+						`INSERT INTO cities (region_id, name) VALUES ?`,
+						[[[region, mysqlString(event.city)]]]);
 
-				const street = await this.setValue(connection,
-					`SELECT id FROM streets WHERE name LIKE '${mysqlString(event.street_name)}' AND city_id LIKE '${city}'`,
-					`INSERT INTO streets (name, city_id, old_name, origin) VALUES ?`,
-					[[[event.street_name, city, event.street_old_name, event.street_origin]]]
-				);
-
-				for await (let house of event.houses) {
-					await this.setValue(connection,
-						`SELECT id FROM houses WHERE street_id LIKE '${street}' AND number LIKE '${house.number}'`,
-						`INSERT INTO houses (street_id, number, origin) VALUES ?`,
-						[[[street, house.number, house.origin_numbers]]]
+					const street = await this.setValue(connection,
+						`SELECT id FROM streets WHERE name LIKE '${mysqlString(event.street_name)}' AND city_id LIKE '${city}'`,
+						`INSERT INTO streets (name, city_id, old_name, origin) VALUES ?`,
+						[[[event.street_name, city, event.street_old_name, event.street_origin]]]
 					);
-				}
 
-				const response = await new Promise((resolve, reject) => {
-					connection.query(eventSQL, [[[street, event.type, event.date, event.time, event.reason]]], (error, result) => {
-						// console.log(error);
-						resolve();
+					for await (let house of event.houses) {
+						await this.setValue(connection,
+							`SELECT id FROM houses WHERE street_id LIKE '${street}' AND number LIKE '${house.number}'`,
+							`INSERT INTO houses (street_id, number, origin) VALUES ?`,
+							[[[street, house.number, house.origin_numbers]]]
+						);
+					}
+
+					await new Promise((resolve, reject) => {
+						connection.query(eventSQL, [[[street, event.type, event.date, event.time, event.reason]]], (error, result) => {
+							resolve();
+						});
 					});
-				});
-				// console.log({ city, name: event.city, response });
+				}
+				logger.stopProcessing('Import');
+				callback({ success: true });
+			});
 
-			}
-
-			logger.stopProcessing('Import');
-			callback({ success: true });
 		});
 	}
 
