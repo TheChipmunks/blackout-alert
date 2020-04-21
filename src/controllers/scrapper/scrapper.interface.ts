@@ -5,6 +5,7 @@ export interface IScrapedRow {
 	region: string;
 	date: _date;
 	time: string;
+	publish_time: string;
 	reason: string;
 	origin: string;
 	type: EventType;
@@ -37,6 +38,7 @@ export interface IConvertedEvent {
 	street_origin: string;
 	date: _date;
 	time: string;
+	publish_time: string;
 	reason: string;
 	houses: IConvertedHouse[];
 	type: EventType

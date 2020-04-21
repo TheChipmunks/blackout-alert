@@ -1,5 +1,6 @@
 // SELECT * FROM `streets` WHERE `street_name` LIKE '
-import * as express from 'express';
+import express from 'express'
+;
 import { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
 import database, { DBResponse } from '../../database';

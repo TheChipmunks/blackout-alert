@@ -36,9 +36,9 @@ class DB {
 	}
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
-		const eventSQL = 'INSERT INTO events (street, type, date, time, reason) VALUES ?';
+		const eventSQL = 'INSERT INTO events (street, type, publish_time, date, time, reason) VALUES ?';
 		this.pool.getConnection((err, connection) => {
-			logger.startProcessing('Import');
+			logger.startProcessing('Import', data.events.length);
 			connection.query('DELETE FROM events WHERE date >= NOW()', '', async error => {
 				if (error) throw error;
 				for await (let event of data.events) {
@@ -69,10 +69,11 @@ class DB {
 					}
 
 					await new Promise((resolve, reject) => {
-						connection.query(eventSQL, [[[street, event.type, event.date, event.time, event.reason]]], (error, result) => {
+						connection.query(eventSQL, [[[street, event.type, event.publish_time, event.date, event.time, event.reason]]], (error, result) => {
 							resolve();
 						});
 					});
+					logger.increaseProgress();
 				}
 				logger.stopProcessing('Import');
 				callback({ success: true });
@@ -85,6 +86,7 @@ class DB {
 		return new Promise(async (resolve, rej) => {
 			let selected = await new Promise((resolve, reject) => {
 				connection.query(selectSQL, '', (error, res) => {
+					if (error) console.log(error);
 					if (!res.length) {
 						resolve(undefined);
 						return;

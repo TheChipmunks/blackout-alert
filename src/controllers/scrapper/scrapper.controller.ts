@@ -1,12 +1,15 @@
-import * as express from 'express';
-import { Request, Response } from 'express';
+import express, { Request, Response } from 'express';
 import IControllerBase from 'interfaces/IControllerBase.interface';
 import { range, rangeFromIrregularNumbers } from '../../utilits';
-import axios from 'axios';
 import database, { DBResponse } from '../../database';
 import { EventType, IConvertedDBStructure, IConvertedEvent, IConvertedHouse, IPlace, IScrapedRow, IStreet } from './scrapper.interface';
 import { logger } from '../../middleware/logger';
+import axios from 'axios'
+// MOCKS
+import plannedHTML from './mocks/plannedHTML.json';
+import outagesHTML from './mocks/outagesHTML.json';
 import moment = require('moment');
+
 const jsdom = require('jsdom');
 const { JSDOM } = jsdom;
 
@@ -19,10 +22,10 @@ class ScrapperController implements IControllerBase {
 	}
 
 	public initRoutes() {
-		this.router.get(this.path, this.scrape(this));
+		this.router.get(this.path, this.scrape);
 	}
 
-	scrape = (that: ScrapperController) => async (req: Request, res: Response) => {
+	scrape = async (req?: Request, res?: Response) => {
 		logger.startTimeEvents();
 		const response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
 		logger.timeEvent('fetch HTML');
@@ -44,7 +47,7 @@ class ScrapperController implements IControllerBase {
 						break;
 					case 1:
 						data.origin = td.textContent;
-						data.places = that.parseMainContentFrom(td.innerHTML);
+						data.places = this.parseMainContentFrom(td.innerHTML);
 						break;
 					case 2:
 						data.reason = td.textContent;
@@ -52,26 +55,33 @@ class ScrapperController implements IControllerBase {
 					case 3:
 						data.time = td.textContent;
 						break;
+					case 4:
+						data.type = EventType.outages;
+						data.publish_time = td.textContent;
+						break;
 				}
 				return data;
 			}, {});
 			scrapedRow.date = prevDate;
-			scrapedRow.type = EventType.planned;
+			if (!scrapedRow.type) scrapedRow.type = EventType.planned;
 			return scrapedRow;
 		}).filter(el => !!el);
 		logger.timeEvent('parse HTML');
-		const convertedData = that.convertStructure(dates);
+		const convertedData = this.convertStructure(dates);
 		logger.timeEvent('convert data');
 		database.saveScrapedData(convertedData, (response: DBResponse) => {
 			logger.timeEvent('save in database');
-			res.status(response.success ? 200 : 409).send({ response });
+			res && res.status(response.success ? 200 : 409).send({ response });
 			logger.endTimeEvents();
 		});
 	};
 
 	parseMainContentFrom(origin: string): IPlace[] {
 		let splitted = origin.split(/<br>/);
-		splitted = splitted.filter(el => el !== '');
+		splitted = splitted.filter((item, index, array) => {
+			if (item === '') return false;
+			return !(!!item.match('<b>(.*)</b>') && array[index + 1] && !!array[index + 1].match('<b>(.*)</b>'));
+		});
 		if (splitted.length % 2) splitted.pop();
 		const places: IPlace[] = splitted.reduce((acc: IPlace[], item, index, array) => {
 			if (index % 2) return acc;
@@ -135,6 +145,7 @@ class ScrapperController implements IControllerBase {
 						city: place.city,
 						date: row.date,
 						time: row.time,
+						publish_time: row.publish_time,
 						street_name: street.name,
 						street_old_name: street.oldName,
 						street_origin: place.origin,

@@ -1,12 +1,13 @@
-import * as express from 'express';
+import express from 'express'
+;
 import { Application } from 'express';
 import './controllers/commandLine'
 
 class App {
 	public app: Application;
-	public port: number;
+	public port: string;
 
-	constructor(appInit: { port: number; middleWares: any; controllers: any; }) {
+	constructor(appInit: { port: string; middleWares: any; controllers: any; }) {
 		this.app = express();
 		this.port = appInit.port;
 
