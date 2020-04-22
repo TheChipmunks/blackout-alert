@@ -19,8 +19,8 @@ process.stdin.on('data', (text) => {
 
 function scrape() {
 	console.log('Start scrapping');
-	let scrapper = new ScrapperController()
-	scrapper.scrape()
+	let scrapper = new ScrapperController();
+	scrapper.scrape();
 }
 
 function done() {

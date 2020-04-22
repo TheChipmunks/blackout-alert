@@ -19,6 +19,7 @@ class ScrapperController implements IControllerBase {
 
 	constructor() {
 		this.initRoutes();
+		this.scrape()
 	}
 
 	public initRoutes() {
@@ -71,8 +72,9 @@ class ScrapperController implements IControllerBase {
 		logger.timeEvent('convert data');
 		database.saveScrapedData(convertedData, (response: DBResponse) => {
 			logger.timeEvent('save in database');
-			res && res.status(response.success ? 200 : 409).send({ response });
+			// res && res.status(response.success ? 200 : 409).send({ response });
 			logger.endTimeEvents();
+			process.exit();
 		});
 	};
 

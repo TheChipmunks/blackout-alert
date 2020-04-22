@@ -4,6 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
+    "scrape": "tsc -p . && ts-node dist/server.js",
     "dev": "ts-node src/server.ts",
     "start": "ts-node dist/server.js",
     "build": "tsc -p ."
