@@ -42,10 +42,10 @@ class DB {
 			connection.query('DELETE FROM events WHERE date >= NOW()', '', async error => {
 				if (error) throw error;
 				for await (let event of data.events) {
-					// if (moment(event.date).diff(moment(), 'days') < 0) {
-					// 	logger.increaseProgress();
-					// 	continue;
-					// }
+					if (moment(event.date).diff(moment(), 'days') < 0) {
+						logger.increaseProgress();
+						continue;
+					}
 
 					const region = await this.setValue(connection,
 						`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
