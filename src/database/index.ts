@@ -85,7 +85,7 @@ class DB {
 							[[[street, house.number, house.origin_numbers]]]
 						);
 						await this.setValue(connection,
-							`SELECT id FROM house_events WHERE house_id LIKE '${house_id}' AND event_id LIKE '${event_id}'`,
+							`SELECT house_id as id FROM house_events WHERE house_id LIKE '${house_id}' AND event_id LIKE '${event_id}'`,
 							`INSERT INTO house_events (house_id, event_id) VALUES ?`,
 							[[[house_id, event_id]]]
 						);

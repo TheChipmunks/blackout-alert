@@ -108,7 +108,7 @@ class ScrapperController implements IControllerBase {
 		return string.split(';').map(item => {
 			if (!item || item === ' ') return;
 			const name = item.match(/(^\d*['`"\. А-ЩЬЮЯҐЄІЇа-щьюяґєіїA-Za-z]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєіїA-Za-z]\d*))+/ig);
-			const numbers = item.match(/(\ \d{1,}-{0,2}\d*\/?\d*[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?)+/ig);
+			const numbers = item.match(/(\ \d{1,}[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?-{0,2}\d*\/?\d*[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?)+/ig);
 			const oldName = item.match(/(\([ А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}\))+/ig);
 			if (!numbers) return;
 			return {
@@ -117,22 +117,12 @@ class ScrapperController implements IControllerBase {
 				numbers: numbers.map(el => {
 					let number = el.trim();
 					if (number.includes('--')) number = number.replace('--', '-');
-					if (number.includes('-')) {
-						const points = number.split('-');
-						let start = points[0];
-						const end = points[1];
-						if(start === '0') start = '1';
-						if (+start && +end && +end < 1000) {
-							return range(+start, +end, 1);
-						}
-						const matches = number.match(/(.*)-(.*)/);
-						if (matches && matches.length > 2) {
-							return rangeFromIrregularNumbers(matches[1], matches[2]);
-						}
-						return number;
-					} else {
-						return number;
+					const matches = number.match(/(.*)-(.*)/);
+					if (matches && matches.length > 2) {
+						if (+matches[2] && +matches[2] > 1000) return number;
+						return rangeFromIrregularNumbers(matches[1], matches[2]);
 					}
+					return number;
 				}).flat(),
 				originNumbers: item
 			};
