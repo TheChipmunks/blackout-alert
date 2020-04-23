@@ -41,8 +41,13 @@ class DB {
 			logger.startProcessing('Import', data.events.length);
 			connection.query('DELETE FROM events WHERE date >= NOW()', '', async error => {
 				if (error) throw error;
+				// const { count }: any = await this.selectValue(connection, 'SELECT COUNT(*) as count FROM events;');
+				// console.log(count);
 				for await (let event of data.events) {
-					if (moment(event.date).diff(moment(), 'days') < 0) continue;
+					if (moment(event.date).diff(moment(), 'days') < 0) {
+						logger.increaseProgress();
+						continue;
+					}
 
 					const region = await this.setValue(connection,
 						`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
@@ -52,7 +57,7 @@ class DB {
 					const city = await this.setValue(connection,
 						`SELECT id FROM cities WHERE name LIKE '${mysqlString(event.city)}' AND region_id LIKE '${region}'`,
 						`INSERT INTO cities (region_id, name) VALUES ?`,
-						[[[region, mysqlString(event.city)]]]);
+						[[[region, event.city]]]);
 
 					const street = await this.setValue(connection,
 						`SELECT id FROM streets WHERE name LIKE '${mysqlString(event.street_name)}' AND city_id LIKE '${city}'`,
@@ -67,7 +72,6 @@ class DB {
 							[[[street, house.number, house.origin_numbers]]]
 						);
 					}
-
 					await new Promise((resolve, reject) => {
 						connection.query(eventSQL, [[[street, event.type, event.publish_time, event.date, event.time, event.reason]]], (error, result) => {
 							resolve();
@@ -79,6 +83,23 @@ class DB {
 				callback({ success: true });
 			});
 
+		});
+	}
+
+
+	selectValue(connection, selectSQL) {
+		return new Promise(async (resolve, rej) => {
+			let selected = await new Promise((resolve, reject) => {
+				connection.query(selectSQL, '', (error, res) => {
+					if (error) console.log(error);
+					if (!res.length) {
+						resolve(undefined);
+						return;
+					}
+					resolve(res[0]);
+				});
+			});
+			resolve(selected);
 		});
 	}
 

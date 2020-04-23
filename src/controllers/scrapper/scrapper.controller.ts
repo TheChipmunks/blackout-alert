@@ -4,10 +4,12 @@ import { range, rangeFromIrregularNumbers } from '../../utilits';
 import database, { DBResponse } from '../../database';
 import { EventType, IConvertedDBStructure, IConvertedEvent, IConvertedHouse, IPlace, IScrapedRow, IStreet } from './scrapper.interface';
 import { logger } from '../../middleware/logger';
-import axios from 'axios'
+import axios from 'axios';
 // MOCKS
 import plannedHTML from './mocks/plannedHTML.json';
 import outagesHTML from './mocks/outagesHTML.json';
+import content from './mocks/parseMainContent.json';
+
 import moment = require('moment');
 
 const jsdom = require('jsdom');
@@ -19,7 +21,7 @@ class ScrapperController implements IControllerBase {
 
 	constructor() {
 		this.initRoutes();
-		this.scrape()
+		this.scrape();
 	}
 
 	public initRoutes() {
@@ -28,13 +30,19 @@ class ScrapperController implements IControllerBase {
 
 	scrape = async (req?: Request, res?: Response) => {
 		logger.startTimeEvents();
-		const response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
+		const planned_response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
+		const outages_response = await axios.get('https://ksoe.com.ua/disconnection/outages/');
 		logger.timeEvent('fetch HTML');
-		const dom = new JSDOM(response.data);
-		const html = dom.window.document;
+		const planned_dom = new JSDOM(planned_response.data);
+		const planned_html = planned_dom.window.document;
+		const outages_dom = new JSDOM(outages_response.data);
+		const outages_html = outages_dom.window.document;
 		logger.timeEvent('create DOM');
-		const content = html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
-		const rows = Array.apply(null, content);
+		const planned_content = planned_html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
+		const outages_content = outages_html.querySelector('.table').querySelector('tbody').querySelectorAll(' tr');
+		const planned_rows = Array.apply(null, planned_content);
+		const outages_rows = Array.apply(null, outages_content);
+		const rows = planned_rows.concat(outages_rows);
 		let prevDate = null;
 		const dates: IScrapedRow[] = rows.map(tr => {
 			if (tr.cells.length === 1) {
@@ -99,7 +107,7 @@ class ScrapperController implements IControllerBase {
 	getStreetsFrom(string: string): IStreet[] {
 		return string.split(';').map(item => {
 			if (!item || item === ' ') return;
-			const name = item.match(/(^\d*['`"\. А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєії]\d*))+/ig);
+			const name = item.match(/(^\d*['`"\. А-ЩЬЮЯҐЄІЇа-щьюяґєіїA-Za-z]{2,}([А-ЩЬЮЯҐЄІЇа-щьюяґєіїA-Za-z]\d*))+/ig);
 			const numbers = item.match(/(\ \d{1,}-{0,2}\d*\/?\d*[А-ЩЬЮЯҐЄІЇа-щьюяґєії]?)+/ig);
 			const oldName = item.match(/(\([ А-ЩЬЮЯҐЄІЇа-щьюяґєії]{2,}\))+/ig);
 			if (!numbers) return;
