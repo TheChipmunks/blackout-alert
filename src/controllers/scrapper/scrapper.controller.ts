@@ -29,10 +29,6 @@ class ScrapperController implements IControllerBase {
 	}
 
 	scrape = async (req?: Request, res?: Response) => {
-		console.log(rangeFromIrregularNumbers('01а','10'));
-		console.log(rangeFromIrregularNumbers('5','7B'));
-		console.log(rangeFromIrregularNumbers('50', '55'));
-		process.exit();
 		logger.startTimeEvents();
 		const planned_response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
 		const outages_response = await axios.get('https://ksoe.com.ua/disconnection/outages/');
