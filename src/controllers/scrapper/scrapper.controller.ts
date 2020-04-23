@@ -29,6 +29,10 @@ class ScrapperController implements IControllerBase {
 	}
 
 	scrape = async (req?: Request, res?: Response) => {
+		console.log(rangeFromIrregularNumbers('01а','10'));
+		console.log(rangeFromIrregularNumbers('5','7B'));
+		console.log(rangeFromIrregularNumbers('50', '55'));
+		process.exit();
 		logger.startTimeEvents();
 		const planned_response = await axios.get('https://ksoe.com.ua/disconnection/planned/');
 		const outages_response = await axios.get('https://ksoe.com.ua/disconnection/outages/');
@@ -119,8 +123,9 @@ class ScrapperController implements IControllerBase {
 					if (number.includes('--')) number = number.replace('--', '-');
 					if (number.includes('-')) {
 						const points = number.split('-');
-						const start = points[0];
+						let start = points[0];
 						const end = points[1];
+						if(start === '0') start = '1';
 						if (+start && +end && +end < 1000) {
 							return range(+start, +end, 1);
 						}
@@ -133,7 +138,7 @@ class ScrapperController implements IControllerBase {
 						return number;
 					}
 				}).flat(),
-				originNumbers: numbers.map(el => el.trim())
+				originNumbers: item
 			};
 		}).filter(el => !!el);
 	}
@@ -146,7 +151,7 @@ class ScrapperController implements IControllerBase {
 					const houses: IConvertedHouse[] = street.numbers.map((number) => {
 						const num: IConvertedHouse = {
 							number,
-							origin_numbers: `${street.numbers}`
+							origin_numbers: `${street.originNumbers}`
 						};
 						return num;
 					});

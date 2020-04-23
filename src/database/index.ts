@@ -4,6 +4,7 @@ import { IConvertedDBStructure } from '../controllers/scrapper/scrapper.interfac
 import { mysqlString } from '../utilits';
 import moment = require('moment');
 import { logger } from '../middleware/logger';
+import crypto from 'crypto';
 
 const { HOST, USER, PORT, PASS, NAME, CONNECTION_LIMIT } = config;
 
@@ -36,18 +37,15 @@ class DB {
 	}
 
 	saveScrapedData(data: IConvertedDBStructure, callback: (response: DBResponse) => void) {
-		const eventSQL = 'INSERT INTO events (street, type, publish_time, date, time, reason) VALUES ?';
 		this.pool.getConnection((err, connection) => {
 			logger.startProcessing('Import', data.events.length);
 			connection.query('DELETE FROM events WHERE date >= NOW()', '', async error => {
 				if (error) throw error;
-				// const { count }: any = await this.selectValue(connection, 'SELECT COUNT(*) as count FROM events;');
-				// console.log(count);
 				for await (let event of data.events) {
-					if (moment(event.date).diff(moment(), 'days') < 0) {
-						logger.increaseProgress();
-						continue;
-					}
+					// if (moment(event.date).diff(moment(), 'days') < 0) {
+					// 	logger.increaseProgress();
+					// 	continue;
+					// }
 
 					const region = await this.setValue(connection,
 						`SELECT id FROM regions WHERE name LIKE '${event.region}'`,
@@ -64,19 +62,34 @@ class DB {
 						`INSERT INTO streets (name, city_id, old_name, origin) VALUES ?`,
 						[[[event.street_name, city, event.street_old_name, event.street_origin]]]
 					);
+					const reason_hash = crypto.createHash('md5').update(event.reason).digest('hex');
+					const reason_id = await this.setValue(connection,
+						`SELECT id FROM reasons WHERE hash LIKE '${reason_hash}'`,
+						`INSERT INTO reasons (reason, hash) VALUES ?`,
+						[[[event.reason, reason_hash]]]
+					);
+					const event_id = await this.setValue(connection,
+						`SELECT id FROM events WHERE 
+						city_id LIKE ${city} AND
+						type LIKE ${event.type} AND 
+						date LIKE '${moment(event.date).format('YYYY-MM-DD')}' AND 
+						time LIKE '${event.time}' AND 
+						reason_id LIKE '${reason_id}'`,
+						'INSERT INTO events (city_id, type, publish_time, date, time, reason_id) VALUES ?',
+						[[[city, event.type, event.publish_time, event.date, event.time, reason_id]]]);
 
 					for await (let house of event.houses) {
-						await this.setValue(connection,
+						const house_id = await this.setValue(connection,
 							`SELECT id FROM houses WHERE street_id LIKE '${street}' AND number LIKE '${house.number}'`,
 							`INSERT INTO houses (street_id, number, origin) VALUES ?`,
 							[[[street, house.number, house.origin_numbers]]]
 						);
+						await this.setValue(connection,
+							`SELECT id FROM house_events WHERE house_id LIKE '${house_id}' AND event_id LIKE '${event_id}'`,
+							`INSERT INTO house_events (house_id, event_id) VALUES ?`,
+							[[[house_id, event_id]]]
+						);
 					}
-					await new Promise((resolve, reject) => {
-						connection.query(eventSQL, [[[street, event.type, event.publish_time, event.date, event.time, event.reason]]], (error, result) => {
-							resolve();
-						});
-					});
 					logger.increaseProgress();
 				}
 				logger.stopProcessing('Import');
@@ -127,45 +140,51 @@ class DB {
 		});
 	}
 
+
 	findStreet(req: { city?: string, street: string }, callback: (response: DBResponse) => void) {
-		this.pool.query('SELECT * FROM some', '', (error, _data) => {
-			let data = [];
-			for (let item of _data) {
-				if (data.find(el => el[0] === item.name_1)) continue;
-				data.push([item.name_1, item.name_5, item.name_2, item.name_4, item.name_3]);
-			}
-
-
-			// const uniqueArray = data.filter((thing, index) => {
-			// 	const _thing = JSON.stringify(thing);
-			// 	return index === thing.findIndex(obj => {
-			// 		return JSON.stringify(obj) === _thing;
-			// 	});
-			// });
-			callback({ success: true, data });
-		});
-		return;
-		const conditions = {
-			onlyStreet:
-				`WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`
-			,
-			cityAndStreet:
-				`WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`
-
-		};
-		const sql =
-			`SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses FROM streets
-				LEFT JOIN numbers ON streets.street_id = numbers.street_id
-				${!req.city ? conditions.onlyStreet : conditions.cityAndStreet}
-				GROUP BY streets.street_id`
-		;
-		this.pool.query(sql, '', (error, data) => {
-			if (error) {
-				callback({ success: false, error });
-				return;
-			}
-			callback({ success: true, data: data });
-		});
+		// 	this.pool.query('SELECT * FROM some', '', (error, _data) => {
+		// 		let data = [];
+		// 		for (let item of _data) {
+		// 			if (data.find(el => el[0] === item.name_1)) continue;
+		// 			data.push([item.name_1, item.name_5, item.name_2, item.name_4, item.name_3]);
+		// 		}
+		//
+		//
+		// 		// const uniqueArray = data.filter((thing, index) => {
+		// 		// 	const _thing = JSON.stringify(thing);
+		// 		// 	return index === thing.findIndex(obj => {
+		// 		// 		return JSON.stringify(obj) === _thing;
+		// 		// 	});
+		// 		// });
+		// 		callback({ success: true, data });
+		// 	});
+		// 	return;
+		// 	const conditions = {
+		// 		onlyStreet:
+		// 			`WHERE street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%'`
+		// 		,
+		// 		cityAndStreet:
+		// 			`WHERE city LIKE '${req.city}' AND (street_name LIKE '${req.street}%' OR street_old_name LIKE '${req.street}%')`
+		//
+		//
+		// 	};
+		// 	const sql =
+		//
+		//
+		// 		`SELECT streets.*, GROUP_CONCAT(numbers.number SEPARATOR ', ') as houses FROM streets
+		// 				LEFT JOIN numbers ON streets.street_id = numbers.street_id
+		// 				${!req.city ? conditions.onlyStreet : conditions.cityAndStreet}
+		// 				GROUP BY streets.street_id`
+		//
+		//
+		// 	;
+		// 	this.pool.query(sql, '', (error, data) => {
+		// 		if (error) {
+		// 			callback({ success: false, error });
+		// 			return;
+		// 		}
+		// 		callback({ success: true, data: data });
+		// 	});
 	}
 
 }

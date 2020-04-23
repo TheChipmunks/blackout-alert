@@ -49,10 +49,13 @@ export const range = (start, end, step) => {
 };
 
 export const rangeFromIrregularNumbers = (start, end) => {
-	let to: string;
+	let from = start;
+	let to = end;
 	if (!+end) to = parseIrregularNumber(end);
-	const array = range(+start, +to, 1);
-	array.push(end);
+	if (!+start) from = parseIrregularNumber(start);
+	const array = range(+from, +to, 1);
+	if (!+end) array.push(end);
+	if (!+start) array.unshift(start);
 	return array;
 };
 

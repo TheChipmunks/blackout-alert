@@ -22,7 +22,7 @@ export interface IStreet {
 	name: string;
 	oldName: string;
 	numbers: string[];
-	originNumbers: string[];
+	originNumbers: string;
 }
 
 export enum EventType {
