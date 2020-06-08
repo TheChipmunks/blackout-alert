@@ -5,7 +5,7 @@ process.stdin.resume();
 process.stdin.setEncoding('utf8');
 
 process.stdin.on('data', (text) => {
-	switch (text.trim()) {
+	switch (text.toString().trim()) {
 		case 'quit':
 			done();
 			break;

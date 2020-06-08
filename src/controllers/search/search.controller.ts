@@ -20,8 +20,8 @@ class SearchController implements IControllerBase {
 
 	search = async (req: Request, res: Response) => {
 		logger.startTimeEvents();
-		const city = req.query.city;
-		const street = req.query.street;
+		const city = req.query.city.toString();
+		const street = req.query.street.toString();
 		if (street) {
 			database.findStreet({ city, street }, (response: DBResponse) => {
 				logger.timeEvent(`to find ${city} ${street}`);
